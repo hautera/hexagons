@@ -47,6 +47,7 @@ class Hex {
         this.n[i].addNeighbor(this, n_inversed_ind[i]);
       }
     }
+    return this;
   }
 
   //returns the list of neighbors this hex has listed 
@@ -86,7 +87,7 @@ class Hex {
   }
 
   //draws this hexagon on the screen 
-  draw = (size, context, color) => {
+  draw = (size, context, color, x_offset = 0, y_offset = 0) => {
     context.fillStyle = color;
     context.beginPath();
     context.moveTo(this.x,this.y);
@@ -98,18 +99,21 @@ class Hex {
       } else {
         [y0, x0] = num_60rotations(i);
       }
-      context.lineTo(x0 * size + this.x, y0 * size  + this.y);
+      context.lineTo(size * (x0 + this.x) + x_offset, size * (y0 + this.y) + y_offset);
     }
     context.closePath();
     context.fill();
     context.restore();
   };
 
+  //useful i promise 
   explore () { this.explored = true; }
 
-  unexplore() { this.explored = false; }s
+  unexplore() { this.explored = false; }
 
-  explored() { return this.explored; }
+  toString() {
+    return `Hexagon centered at ${this.x}, ${this.y}`;
+  }
 }
 
 
@@ -117,21 +121,36 @@ class Map {
   //size represents the number of layers we will move from the center
   constructor (size) {
     this.root = new Hex(noNeighbors, 0, 0);
-    const hex1 = new Hex([null, null, null, this.root, null, null])
+    if (size > 1) {  
+      let hex1 = new Hex([null, null, null, this.root, null, null], 2 * 0.866 * num_60rotationsOffet30(0)[0], 2 * 0.866 * num_60rotationsOffet30(0)[1]);
+      for( let i = 1; i < 6; i ++) {
+        let temp_ls = [null, null, null, null, null, null];
+        let j = (3 + i) % 6;
+        let k = (4 + i) % 6;
+        temp_ls[j] = this.root;
+        temp_ls[k] = hex1;
+
+        let [x, y] = num_60rotationsOffet30(i);
+        x *= 2 * 0.866;
+        y *= 2 * 0.866;
+        hex1 = new Hex(temp_ls, x, y);
+      }
+    }
+    //if size > 2 idk 
+    //TODO proper coords 
+    //Also might not want hex's to keep track of their neighbors :(
+    //If we do proper coords, we probably don't need hexs to 
+    return this;
   }
 
-  tree_layer(offset) {
-    const one = new Hex(noNeighbors);
-    const two = new Hex(noNeighbors);
-  }
-
-  draw(hexSize) {
-    return;
+  draw(hexSize, center_x, center_y, context) {
+    this.apply_function((hex) => {hex.draw(hexSize, context, 'white', center_x, center_y)})
   }
 
   //applies function to all hexes in map
-  map(func) {
+  apply_function(func) {
     this.rmap(this.root, func);
+    this.unexplore();
   }
 
   //resets all hexes to unexplored
@@ -140,7 +159,7 @@ class Map {
   }
 
   runexplore(hex) {
-    if (!hex.explored()) { return; }
+    if (hex && !hex.explored ) { return; }
     hex.unexplore();
     hex.getNeighbors().forEach( (n_hex) => {
       if (n_hex) { this.runexplore(n_hex); }
@@ -150,7 +169,7 @@ class Map {
   //Actually the function that 
   //applies function to all hexes in map
   rmap(hex, func) {
-    if( hex.explored() ) { return; }
+    if( hex && hex.explored ) { return; }
     hex.explore();
     hex.getNeighbors().forEach( (n_hex) => {
       if ( n_hex ) { this.rmap(n_hex, func); }
@@ -177,24 +196,14 @@ function App() {
     canvas.height = window.innerHeight * 2;
     canvas.style.width = `${window.innerWidth}px` ;
     canvas.style.height = `${window.innerHeight}px`;
-
     const context  = canvas.getContext("2d");
     context.scale(2,2);
     contextRef.current = context;
     context.fillStyle = "blue";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    const test = new Hex(noNeighbors, canvas.width/5, canvas.height/5, true);
-    test.draw(size, context, 'white');
-    
-    const colors = ['green', 'yellow', 'red', 'purple', 'orange', 'pink']
-    for (let i = 0; i < 6; i ++) {
-      const [alpha, beta] = num_60rotationsOffet30(i);
-      let offSetX = 2 * alpha * (0.866 * size);
-      let offSetY = 2 * beta * (0.866 * size);
-      const test = new Hex(noNeighbors, canvas.width/5 + offSetX, canvas.height/5 + offSetY, size);
-      test.draw(size, context, colors[i]);
-    }
 
+    let x = new Map(2);
+    x.draw(100, 500, 500, context);
   }, []);
 
   const startCavas = () => {
