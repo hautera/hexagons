@@ -105,11 +105,6 @@ class Map {
         if ( Math.abs(z) + Math.abs(x) + Math.abs(y) < size * 2) { this.hexes.add(new Hex(x,y,z)); }
       }
     }
-    //if size > 2 idk 
-    //TODO proper coords 
-    //Also might not want hex's to keep track of their neighbors :(
-    //If we do proper coords, we probably don't need hexs to 
-    console.log(this.hexes.size);
     return this;
   }
 
@@ -129,6 +124,11 @@ class Map {
       context.stroke();
       context.closePath();
     });
+  }
+
+  //returns a list of hexagons adjacent to the hexagon passed
+  getConnections(hex) {
+
   }
 }
 
