@@ -1,11 +1,5 @@
-import logo from './logo.svg';
 import './App.css';
 import { useEffect, useRef } from 'react';
-
-
-//inversed indexs of the hex
-const n_inversed_ind = [3, 4, 5, 0, 1, 2];
-const noNeighbors = [null, null, null, null, null, null];
 
 //returns the unit vector turned 60 * a degrees where a is an integer 
 //returns null if a < 0
@@ -36,42 +30,21 @@ const num_60rotationsOffet30 = (a) => {
 
 class Hex {
   //creates a hex with specified neighbors 
-  constructor (neighbors, x, y, horizontal=true) {
+  constructor (x, y, z) {
     this.x = x;
     this.y = y;
-    this.n = neighbors.slice();
-    this.horizontal = horizontal;
-    this.explored = false;
-    for (let i = 0; i < 6; i ++ ) {
-      if (this.n[i]) {
-        this.n[i].addNeighbor(this, n_inversed_ind[i]);
-      }
-    }
+    this.z = z;
     return this;
-  }
-
-  //returns the list of neighbors this hex has listed 
-  getNeighbors() {
-    return this.n.slice();
   }
 
   //returns the x, y coordinates of this hexagon
   getCoords() {
-    return [this.x, this.y];
-  }
-
-  // hex is a neighboring hexagon
-  // 0 <= pos =< 5 is the position of the hexagon 
-  addNeighbor(hex, pos) {
-    if( !this.n[pos] ) {
-      this.n[pos] = hex;
-    } else {
-      console.error("Already have this neighbor");
-    }
+    return [this.x, this.y, this.z];
   }
 
   //return euclidian distance from center of an
   //x,y coordinate
+  //todo make three coordinate distances 
   dist (x, y) {
     const dx = (this.x - x);
     const dy = (this.y - y);
@@ -79,40 +52,45 @@ class Hex {
   }
 
   //returns true if x,y are in the hexagon
+  //TODO make this work 
   contains(x,y) {
-    for (let i = 0; i < 6; i ++ ) {
-      if ( this.n[i] && this.n[i].dist(x,y) < this.dist(x,y)) { return false; }
+    return false;
+  }
+
+  //given the 3-coordinate hex grid and a hexagon size,
+  //calculate the center of this hexagon
+  center() {
+    let x_center = 0, y_center = 0;
+    const coords = this.getCoords();
+    for (let axis = 0; axis < coords.length; axis ++) {
+      let [i, j] = num_60rotations(2*axis);
+      x_center += i * coords[axis];
+      y_center += j * coords[axis];
     }
-    return true;
+    return [x_center, y_center];
   }
 
   //draws this hexagon on the screen 
   draw = (size, context, color, x_offset = 0, y_offset = 0) => {
     context.fillStyle = color;
+    let [center_x , center_y] = this.center();
     context.beginPath();
-    context.moveTo(this.x,this.y);
-
     for(let i = 0; i < 7; i++){
-      let x0, y0;
-      if (this.horizontal){
-        [x0, y0] = num_60rotations(i);
-      } else {
-        [y0, x0] = num_60rotations(i);
-      }
-      context.lineTo(size * (x0 + this.x) + x_offset, size * (y0 + this.y) + y_offset);
+      let [x0, y0] = num_60rotations(i);
+      context.lineTo(size * (x0 + center_x) + x_offset, size * (y0 + center_y) + y_offset);
     }
     context.closePath();
-    context.fill();
-    context.restore();
+    context.stroke();
+    context.fillText(this.toString(), center_x * size + x_offset, center_y * size + y_offset, size)
   };
 
-  //useful i promise 
-  explore () { this.explored = true; }
-
-  unexplore() { this.explored = false; }
-
   toString() {
-    return `Hexagon centered at ${this.x}, ${this.y}`;
+    return `${this.x}, ${this.y}, ${this.z}`;
+  }
+
+  //identifies if this hex is at the same coordinates as another hex
+  eqs(other) {
+    return other && this.x === other.x && this.y === other.y && this.x === other.z;
   }
 }
 
@@ -120,76 +98,46 @@ class Hex {
 class Map {
   //size represents the number of layers we will move from the center
   constructor (size) {
-    this.root = new Hex(noNeighbors, 0, 0);
-    if (size > 1) {  
-      let hex1 = new Hex([null, null, null, this.root, null, null], 2 * 0.866 * num_60rotationsOffet30(0)[0], 2 * 0.866 * num_60rotationsOffet30(0)[1]);
-      for( let i = 1; i < 6; i ++) {
-        let temp_ls = [null, null, null, null, null, null];
-        let j = (3 + i) % 6;
-        let k = (4 + i) % 6;
-        temp_ls[j] = this.root;
-        temp_ls[k] = hex1;
-
-        let [x, y] = num_60rotationsOffet30(i);
-        x *= 2 * 0.866;
-        y *= 2 * 0.866;
-        hex1 = new Hex(temp_ls, x, y);
+    this.hexes = new Set();
+    for (let x = -size + 1; x < size ; x ++) {
+      for (let y = -size + 1; y < size ; y ++) {
+        let z = - (x + y);
+        if ( Math.abs(z) + Math.abs(x) + Math.abs(y) < size * 2) { this.hexes.add(new Hex(x,y,z)); }
       }
     }
     //if size > 2 idk 
     //TODO proper coords 
     //Also might not want hex's to keep track of their neighbors :(
     //If we do proper coords, we probably don't need hexs to 
+    console.log(this.hexes.size);
     return this;
   }
 
   draw(hexSize, center_x, center_y, context) {
-    this.apply_function((hex) => {hex.draw(hexSize, context, 'white', center_x, center_y)})
-  }
-
-  //applies function to all hexes in map
-  apply_function(func) {
-    this.rmap(this.root, func);
-    this.unexplore();
-  }
-
-  //resets all hexes to unexplored
-  unexplore() {
-    this.runexplore(this.root);
-  }
-
-  runexplore(hex) {
-    if (hex && !hex.explored ) { return; }
-    hex.unexplore();
-    hex.getNeighbors().forEach( (n_hex) => {
-      if (n_hex) { this.runexplore(n_hex); }
+    this.hexes.forEach( (hex) => hex.draw(hexSize, context, 'white', center_x, center_y) );
+    const axis_rot = [0,2,4];
+    const axis_name = ['x', 'y', 'z'];
+    axis_rot.forEach( (a, index) => {
+      const [x, y] = num_60rotations(a);
+      context.beginPath();
+      context.moveTo(center_x, center_y);
+      context.lineWidth = 5; 
+      context.strokeStyle = 'red';
+      context.lineTo(center_x - x * 500, center_y - y * 500);
+      context.fillText(axis_name[index], center_x - x * 500, center_y - y * 500);
+      //context.lineTo(center_x + x * 500, center_y + y * 500);
+      context.stroke();
+      context.closePath();
     });
   }
-
-  //Actually the function that 
-  //applies function to all hexes in map
-  rmap(hex, func) {
-    if( hex && hex.explored ) { return; }
-    hex.explore();
-    hex.getNeighbors().forEach( (n_hex) => {
-      if ( n_hex ) { this.rmap(n_hex, func); }
-    });
-    func(hex);
-  }
-
 }
 
 function App() {
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
 
-  const min = (a, b) => {
-    if (a < b) { return a; }
-    else { return b; }
-  };
-
   useEffect(() => {
-    const size = 100;
+    const size = 50;
     const canvas = canvasRef.current;
 
     canvas.width = window.innerWidth * 2;
@@ -202,19 +150,14 @@ function App() {
     context.fillStyle = "blue";
     context.fillRect(0, 0, canvas.width, canvas.height);
 
-    let x = new Map(2);
-    x.draw(100, 500, 500, context);
+    let x = new Map(9);
+    x.draw(size, 500, 300, context);
   }, []);
-
-  const startCavas = () => {
-    console.log()
-  };
 
   return (
     <div className="App">
       <header className="App-header">
         <canvas
-          onLoad={startCavas}
           ref={canvasRef}
         />
       </header>
