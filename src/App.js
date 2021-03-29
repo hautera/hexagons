@@ -1,5 +1,5 @@
 import './App.css';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 //returns the unit vector turned 60 * a degrees where a is an integer 
 //returns null if a < 0
@@ -14,18 +14,6 @@ const num_60rotations = (a) => {
     let [al,be] = num_60rotations(a - 3);
     return [-al, -be]; //beautiful 
   } 
-}
-
-//returns unit vector of 60 * a + 30 deg rotation
-const num_60rotationsOffet30 = (a) => {
-  if (a === 0) { return [0.866, 0.5]; }
-  if (a === 1) { return [0, 1]; }
-  if (a === 2) { return [-0.866, 0.5]; }
-  if (a >= 3) { 
-    let [al, be] = num_60rotationsOffet30(a - 3);
-    return [-al, -be];
-  }
-  
 }
 
 class Hex {
@@ -97,33 +85,42 @@ class Hex {
 
 class Map {
   //size represents the number of layers we will move from the center
-  constructor (size) {
+  constructor (size, center_x, center_y) {
+    this.center_x = center_x;
+    this.center_y = center_y;
     this.hexes = new Set();
     for (let x = -size + 1; x < size ; x ++) {
       for (let y = -size + 1; y < size ; y ++) {
         let z = - (x + y);
-        if ( Math.abs(z) + Math.abs(x) + Math.abs(y) < size * 2) { this.hexes.add(new Hex(x,y,z)); }
+        if (Math.abs(z) + Math.abs(x) + Math.abs(y) < size * 2) { this.hexes.add(new Hex(x,y,z)); }
       }
     }
     return this;
   }
 
-  draw(hexSize, center_x, center_y, context) {
-    this.hexes.forEach( (hex) => hex.draw(hexSize, context, 'white', center_x, center_y) );
-    const axis_rot = [0,2,4];
-    const axis_name = ['x', 'y', 'z'];
-    axis_rot.forEach( (a, index) => {
-      const [x, y] = num_60rotations(a);
-      context.beginPath();
-      context.moveTo(center_x, center_y);
-      context.lineWidth = 5; 
-      context.strokeStyle = 'red';
-      context.lineTo(center_x - x * 500, center_y - y * 500);
-      context.fillText(axis_name[index], center_x - x * 500, center_y - y * 500);
-      //context.lineTo(center_x + x * 500, center_y + y * 500);
-      context.stroke();
-      context.closePath();
-    });
+  incCenter(x, y) {
+    this.center_x = x;
+    this.center_y = y;
+  }
+
+  draw(hexSize, context, drawAxis=false) {
+    this.hexes.forEach( (hex) => hex.draw(hexSize, context, 'white', this.center_x, this.center_y) );
+    if (drawAxis) {
+      const axis_rot = [0,2,4];
+      const axis_name = ['x', 'y', 'z'];
+      axis_rot.forEach( (a, index) => {
+        const [x, y] = num_60rotations(a);
+        context.beginPath();
+        context.moveTo(this.center_x, this.center_y);
+        context.lineWidth = 5; 
+        context.strokeStyle = 'red';
+        context.lineTo(this.center_x - x * 500, this.center_y - y * 500);
+        context.fillText(axis_name[index], this.center_x - x * 500, this.center_y - y * 500);
+        //context.lineTo(center_x + x * 500, center_y + y * 500);
+        context.stroke();
+        context.closePath();
+      });
+    }
   }
 
   //returns a list of hexagons adjacent to the hexagon passed
@@ -135,11 +132,12 @@ class Map {
 function App() {
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
+  const mapRef = useRef(new Map(9, 500, 400));
+  const [dragging, setDragging] = useState(false);
+  const [size, setSize] = useState(50);
 
-  useEffect(() => {
-    const size = 50;
+  const clearScreen = () => {
     const canvas = canvasRef.current;
-
     canvas.width = window.innerWidth * 2;
     canvas.height = window.innerHeight * 2;
     canvas.style.width = `${window.innerWidth}px` ;
@@ -149,17 +147,56 @@ function App() {
     contextRef.current = context;
     context.fillStyle = "blue";
     context.fillRect(0, 0, canvas.width, canvas.height);
+  };
 
-    let x = new Map(9);
-    x.draw(size, 500, 300, context);
+  const resize = (inc) => {
+    setSize(size + inc);
+    clearScreen();
+    const map = mapRef.current;
+    map.draw(size + inc, canvasRef.current.getContext('2d'));
+  }
+
+  useEffect(() => {
+    clearScreen();
+    const canvas = canvasRef.current;
+    let map = mapRef.current;
+    const context = canvas.getContext('2d');
+    map.draw(size, context);
   }, []);
+
+  const startDragging = () => {
+    setDragging(true);
+  };
+
+  const stopDragging = () => {
+    setDragging(false);
+  };
+
+  const drag = (event) => {
+    if (dragging) {
+      clearScreen();
+      let x_offset = event.clientX;
+      let y_offset = event.clientY;
+      const map = mapRef.current;
+      map.incCenter(x_offset, y_offset);
+      map.draw(size, canvasRef.current.getContext('2d'));
+    }
+  }
+
 
   return (
     <div className="App">
       <header className="App-header">
         <canvas
           ref={canvasRef}
+          onMouseDown={startDragging}
+          onMouseUp={stopDragging}
+          onMouseMoveCapture={drag}
         />
+        <div id='control-panel'>
+          <button onClick={ () => {resize(10)}}>+</button>
+          <button onClick={ () => {resize(-10)}}>-</button>
+        </div>
       </header>
     </div>
   );
