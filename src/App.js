@@ -1,6 +1,49 @@
 import './App.css';
 import { useEffect, useRef, useState } from 'react';
 
+//TODO MORE CLICK TESTS :/
+
+const colorMap = (map, context) => {
+  // select a hex
+  // give it a color 
+  //const nodes = map.hexes;
+  const colors = ['blue', 'orange', 'green', 'yellow'];
+  const rootHex = map.selectHex(0,0,0);
+  rColor(rootHex, colors, map, context);
+}
+
+const rColor = (hex, colors, map, context) => {
+  if( hex.color === null ) {
+    const [x,y,z] = hex.getCoords();
+    console.log(x,y,z);
+    //we assume that the hex's color is null if it isn't idk
+    const neighbors = map.getNeighbors(hex);
+    for (let i = 0; i < colors.length; i ++) {
+      let neighborColors = neighbors.map( (h) => h.color );
+      const color = colors[i];
+      console.log(color, neighborColors, [x,y,z]);
+      if( !neighborColors.includes(color) ){
+        hex.color = color; 
+        //console.log(`Selected color: ${color}`)
+        hex.draw(map.getSize(), context, map.center_x, map.center_y, true);
+        //const isSol = neighbors.map( (h) => rColor(h, colors, map, context) );   
+        // we have selected a color 
+        //now we recursively calculate the other colors 
+        let firstNull = neighborColors.indexOf(null);
+        while ( firstNull !== -1 ) {
+          if ( !rColor(neighbors[firstNull], colors, map, context) ) break;
+          neighborColors = neighbors.map( (h) => h.color );
+          firstNull = neighborColors.indexOf(null);
+        }
+        if ( !neighborColors.includes(null) ) {
+          return true;
+        }
+      } 
+    }
+    hex.color = null;
+    return false;
+  }
+}
 
 //returns the unit vector turned 60 * a degrees where a is an integer 
 //returns null if a < 0
@@ -17,25 +60,13 @@ const num_60rotations = (a) => {
   } 
 }
 
-const num_60rotationsOffset30 = (a) => {
-  if (a === 0) {
-    return [0.866,0.5];
-  } else if (a === 1) {
-    return [0, 1];
-  } else if (a === 2) {
-    return [-0.866, 0.5];
-  } else if (a >= 3) {
-    let [al,be] = num_60rotations(a - 3);
-    return [-al, -be]; //beautiful 
-  } 
-}
-
 class Hex {
   //creates a hex with specified neighbors 
-  constructor (x, y, z) {
+  constructor (x, y, z, color=null) {
     this.x = x;
     this.y = y;
     this.z = z;
+    this.color = color;
     return this;
   }
 
@@ -67,8 +98,9 @@ class Hex {
   }
 
   //draws this hexagon on the screen 
-  draw = (size, context, color, x_offset = 0, y_offset = 0, fill = false) => {
-    context.fillStyle = color;
+  draw = (size, context, x_offset = 0, y_offset = 0, fill = false, color=null) => {
+    if( color ) { context.fillStyle = color; }
+    else if ( this.color ) { context.fillStyle = this.color; }
     let [center_x , center_y] = this.center();
     context.beginPath();
     for(let i = 0; i < 7; i++){
@@ -97,11 +129,11 @@ class Map {
     this.size = hexSize;
     this.center_x = center_x;
     this.center_y = center_y;
-    this.hexes = new Set();
+    this.hexes = [];
     for (let x = -size + 1; x < size ; x ++) {
       for (let y = -size + 1; y < size ; y ++) {
         let z = - (x + y);
-        if (Math.abs(z) + Math.abs(x) + Math.abs(y) < size * 2) { this.hexes.add(new Hex(x,y,z)); }
+        if (Math.abs(z) + Math.abs(x) + Math.abs(y) < size * 2) { this.hexes.push(new Hex(x,y,z)); }
       }
     }
     return this;
@@ -122,7 +154,7 @@ class Map {
 
   draw(context, drawAxis=false) {
     const hexSize = this.size;
-    this.hexes.forEach( (hex) => hex.draw(hexSize, context, 'white', this.center_x, this.center_y) );
+    this.hexes.forEach( (hex) => hex.draw(hexSize, context, this.center_x, this.center_y, true) );
     if (drawAxis) {
       const axis_rot = [0, 2, 4];
       //const axis_name = ['x', 'y', 'z'];
@@ -168,6 +200,13 @@ class Map {
     return [null, null, null];
   }
 
+  hexDistance(hex1, hex2) {
+    let [x1, x2, x3] = hex1.getCoords();
+    let [y1, y2, y3] = hex2.getCoords();
+    //console.log(x1, x2, x3, y1, y2, y3);
+    return this.distance(x1, x2, x3, y1, y2, y3);
+  }
+
   distance(x, y, z, rx, ry, rz) {
     return Math.abs(x - rx) + Math.abs(y - ry) + Math.abs(z - rz);
   }
@@ -184,8 +223,11 @@ class Map {
   }
 
   //returns a list of hexagons adjacent to the hexagon passed
-  getConnections(hex) {
-
+  getNeighbors(hex) {
+    if ( hex === null ) return null;
+    //O(N)
+    let result = this.hexes.filter( otherHex => this.hexDistance(hex, otherHex) === 2 );
+    return result;
   }
 }
 
@@ -210,6 +252,7 @@ function App() {
   const canvasRef = useRef(null);
   const contextRef = useRef(null);
   const mapRef = useRef(new Map(5, 500, 400, 50));
+  const map = mapRef.current;
   const [dragging, setDragging] = useState(false);
 
   const clearScreen = () => {
@@ -220,8 +263,7 @@ function App() {
     canvas.style.height = `${window.innerHeight}px`;
     const context  = canvas.getContext("2d");
     context.scale(2,2);
-    contextRef.current = context;
-    context.fillStyle = "blue";
+    context.fillStyle = "white";
     context.fillRect(0, 0, canvas.width, canvas.height);
   };
 
@@ -239,6 +281,7 @@ function App() {
     const context = canvas.getContext('2d');
     map.draw(context, true);
     //clickTest();
+    //console.log(map.getNeighbors(map.selectHex(0,0,0)));
   }, []);
 
   const startDragging = () => {
@@ -271,7 +314,7 @@ function App() {
     const [a,b,c] = map.findHex(x,y);
     console.log([a,b,c])
     const hex = map.selectHex(a,b,c);
-    hex.draw(map.size, ctx, 'red', map.center_x, map.center_y, true);
+    hex.draw(map.size, ctx, map.center_x, map.center_y, true, 'red');
   }
 
   //used for debugging 
@@ -293,6 +336,10 @@ function App() {
     }
   }
 
+  const getContext = () => {
+    return canvasRef.current.getContext('2d');
+  }
+
   return (
     <div className="App">
       <header className="App-header">
@@ -306,6 +353,7 @@ function App() {
         <div id='control-panel'>
           <button onClick={ () => {resize(10)}}>+</button>
           <button onClick={ () => {resize(-10)}}>-</button>
+          <button onClick={ () => {colorMap(map, getContext())}}>Color</button>
         </div>
       </header>
     </div>
